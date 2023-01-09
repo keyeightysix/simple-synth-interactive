@@ -3,18 +3,21 @@ import { For, onMount } from "solid-js";
 import { createStore } from "solid-js/store";
 
 export default function Synth(props: any) {
-  let context = {};
-  let ready = false;
-  const core = props.core;
+  //let context = {};
+  // let ready = false;
+  // const core = props.core;
 
   const HzPerMinute = 60,
     bpm = 70;
   const gateInHz = bpm / HzPerMinute / 1;
-  const delayTime = (bpm, sync, multiplier) => {
+  const delayTime = (bpm:number, sync:number, multiplier:number) => {
     return (60000 / bpm) * sync * multiplier;
   };
 
   const patch = {
+    context: null,
+    core: props.core,
+    ready: false,
     chord: [349.23, 440, 523.25],
     gate: gateInHz,
     amp: [
@@ -40,66 +43,50 @@ export default function Synth(props: any) {
 
   const update = (keyValue: any) => {
     setStore(...keyValue);
-    if (ready) {
+    if (store.ready) {
       render();
     }
   };
 
   const playback = async (checked, action) => {
-    console.log(store);
 
-    if (Object.keys(context).length === 0) {
-      console.log("creating new context");
-      context = new window.AudioContext();
+    if (store.context === null) {
 
-      let node = await core.initialize(context, {
+      setStore( 'context', new window.AudioContext() );
+
+      let node = await store.core.initialize(store.context, {
         numberOfInputs: 0,
         numberOfOutputs: 1,
         outputChannelCount: [2],
       });
 
-      node.connect(context.destination);
+      node.connect(store.context.destination);
 
-      ready = true;
+      setStore( 'ready', true );
     }
 
     if (action === "play" && checked) {
-      console.log(ready, context);
-      if (ready) {
-        context.resume();
-        render();
+      if (store.context !== null && store.ready) {
+        store.context.resume();
+        setTimeout( () => {
+          render();
+        }, 150);
       }
     }
 
     if (action === "stop" && checked) {
-      console.log("yo!!!!");
-      context.suspend();
+      store.context.suspend();
     }
   };
 
   // Synth
 
   const render = () => {
-    // setStore(param, value);
-    console.log(store);
-    console.log(core);
-    console.log(context);
-    //return false;
-    // core.render(el.cycle(440));
-    // return false;
 
     const pulseTrain = el.train(store.gate);
-    // core.render(pulseTrain);
-    // return false;
 
     const [aA, aD, aS, aR] = [...store.amp];
-
-    console.log(aA.value, aD.value, aS.value, aR.value, pulseTrain);
-
     const env = el.adsr(aA.value, aD.value, aS.value, aR.value, pulseTrain);
-
-    // core.render(env);
-    // return false;
 
     const synthVoice = (env) =>
       el.mul(
@@ -111,29 +98,7 @@ export default function Synth(props: any) {
         )
       );
 
-    core.render(synthVoice(env));
-    return false;
-
-    // --------------
-
-    const f = el.mul(0.25, el.lowpass(3000, 1, el.cycle(440)));
-    core.render(f, f);
-    return false;
-
-    const test2 = el.lowpass(
-      el.add(300, el.mul(10000, env)),
-      1,
-      synthVoice(env)
-    );
-
-    console.log(core.render(test2));
-    return false;
-
-    // --------------
-
     const [fA, fD, fS, fR] = [...store.filterEnv];
-
-    console.log(fA.value, fD.value, fS.value, fR.value, pulseTrain);
     const fe = el.adsr(fA.value, fD.value, fS.value, fR.value, pulseTrain);
 
     const modulation = (theIntFreq, theFilterEnv) =>
@@ -147,14 +112,13 @@ export default function Synth(props: any) {
       );
 
     const [intf, ef, q] = [...store.filter];
-    console.log(intf.value, ef.value, q.value);
 
     const dry = el.mul(
       0.25,
-      filter(intf.value, fe, q, ef.value, synthVoice(env))
+      filter(intf.value, fe, q.value, ef.value, synthVoice(env))
     );
 
-    console.log(core.render(dry));
+    store.core.render(dry);
   };
 
   return (
